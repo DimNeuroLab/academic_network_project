@@ -21,14 +21,7 @@ DEVICE = torch.device(f'cuda:1' if torch.cuda.is_available() else 'cpu')
 from academic_network_project.anp_core.anp_dataset import ANPDataset
 from academic_network_project.anp_core.anp_utils import *
 
-GT_infosphere_type = sys.argv[1] 
-GT_infosphere_parameters = sys.argv[2]
-
-print(f"Loading GT edges for infosphere type {GT_infosphere_type} and parameters {GT_infosphere_parameters}...")
-coauthor_file = f"{ROOT}/processed/gt_edge_index_{GT_infosphere_type}_{GT_infosphere_parameters}_2019.pt" 
-edges = torch.load(coauthor_file, map_location=DEVICE)
-print(f"Edges shape: {edges.shape}")
-
+# Paths for co-author history and transformed version
 print(f"Loading co-author candidates...")
 co_author_history_path = f'{ROOT}/processed/co_author_infosphere/co_author_history_{YEAR}.pt'
 history_edges_tensor_path = f'{ROOT}/processed/co_author_infosphere/co_author_history_edges_{YEAR}_edges.pt'
@@ -59,10 +52,20 @@ else:
 
 # Converti in set di tuple
 history_set = set(map(tuple, history_edges_tensor.tolist()))
-edges_set = set(map(tuple, edges.t().tolist()))
 
-# Calcola intersezione e percentuale
-intersection = edges_set & history_set
-percentage = len(intersection) / len(edges_set) * 100
 
-print(f"Percentage of edges in co_author_candidates_history: {percentage:.2f}%")
+configuration_list = [(1, 5, 0), (2, 10, 0), (3, '5_2', 0), (4, 1, 0), (1, 5, 2), (2, 10, 2), (3, '5_2', 2), (4, 1, 2), (2, 10, 3), (3, '5_2', 3), (4, 1, 3)]
+for (GT_infosphere_type, GT_infosphere_parameters, SUFFIX_VERSION) in configuration_list:
+    print(f"Loading GT edges for infosphere type {GT_infosphere_type} and parameters {GT_infosphere_parameters}...")
+    suffix_str = f"_{SUFFIX_VERSION}" if SUFFIX_VERSION > 0 else ""
+    coauthor_file = f"{ROOT}/processed/gt_edge_index_{GT_infosphere_type}_{GT_infosphere_parameters}_{YEAR}{suffix_str}.pt" 
+    edges = torch.load(coauthor_file, map_location=DEVICE)
+    print(f"Edges shape: {edges.shape}")
+
+    edges_set = set(map(tuple, edges.t().tolist()))
+
+    # Calcola intersezione e percentuale
+    intersection = edges_set & history_set
+    percentage = len(intersection) / len(edges_set) * 100
+
+    print(f"Percentage of edges in co_author_candidates_history: {percentage:.2f}% for infosphere type {GT_infosphere_type} and parameters {GT_infosphere_parameters} with suffix {suffix_str}")

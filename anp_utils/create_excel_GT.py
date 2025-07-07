@@ -61,13 +61,11 @@ for experiment_folder in os.listdir(base_folder):
     if lr is None or not (lr_lower <= float(lr) <= lr_upper):
         continue
 
-    # Get classification: improved or not
     is_improved = "improved_model" in experiment_folder
     results = results_improved if is_improved else results_normal
 
     gt_type = info.get("GT_infosphere_type", "N/A")
 
-    # Prepare metrics
     val_acc_list = log_data.get("validation_accuracy_list", [])
     loss_list = log_data.get("validation_loss_list", [])
 
@@ -79,52 +77,60 @@ for experiment_folder in os.listdir(base_folder):
     min_loss = min(loss_list) if loss_list else "N/A"
     avg_last10_loss = sum(loss_list[-10:]) / 10 if len(loss_list) >= 10 else "N/A"
 
-    # Flatten all info.json entries
     flat_info = {k: str(v) for k, v in info.items()}
 
-    row = [
-        experiment_folder,
-        lr,
-        val_acc,
-        highest_acc,
-        avg_last10_acc,
-        last_loss,
-        min_loss,
-        avg_last10_loss,
-        len(val_acc_list)
-    ] + [flat_info.get(k, "N/A") for k in sorted(flat_info.keys())]
+    row = {
+        "Folder": experiment_folder,
+        "Learning Rate": lr,
+        "Validation Accuracy": val_acc,
+        "Highest Accuracy": highest_acc,
+        "Avg Last 10 Acc": avg_last10_acc,
+        "Last Loss": last_loss,
+        "Min Loss": min_loss,
+        "Avg Last 10 Loss": avg_last10_loss,
+        "Epochs": len(val_acc_list),
+        **flat_info
+    }
 
     if gt_type not in results:
-        results[gt_type] = {"data": [], "columns": set(sorted(flat_info.keys()))}
+        results[gt_type] = {"data": [], "columns": set(row.keys())}
     else:
-        results[gt_type]["columns"].update(flat_info.keys())
+        results[gt_type]["columns"].update(row.keys())
 
     results[gt_type]["data"].append(row)
 
+# Write to Excel
 def write_results_to_excel(results, filename_prefix):
     wb = Workbook()
     for gt_type, content in results.items():
-        ws = wb.create_sheet(title=f"GT_{gt_type}")
+        ws = wb.create_sheet(title=f"GT_{str(gt_type)[:28]}")  # Avoid slicing error if int
 
-        # Headers
-        info_keys = sorted(content["columns"])
-        headers = [
-            "Folder", "Learning Rate", "Validation Accuracy", "Highest Accuracy", "Avg Last 10 Acc",
-            "Last Loss", "Min Loss", "Avg Last 10 Loss", "Epochs"
-        ] + info_keys
-        ws.append(headers)
+        # Fixed column order
+        fixed_columns = [
+            "Folder", "Learning Rate", "Validation Accuracy", "Highest Accuracy",
+            "Avg Last 10 Acc", "Last Loss", "Min Loss", "Avg Last 10 Loss", "Epochs"
+        ]
 
-        # Add rows
+        # Collect dynamic keys in order of appearance
+        dynamic_keys = []
+        seen_keys = set(fixed_columns)
         for row in content["data"]:
-            # Fill missing keys
-            full_row = row[:9] + [row[9 + info_keys.index(k)] if k in info_keys else "N/A" for k in info_keys]
-            ws.append(full_row)
+            for key in row:
+                if key not in seen_keys:
+                    dynamic_keys.append(key)
+                    seen_keys.add(key)
+
+        all_columns = fixed_columns + dynamic_keys
+        ws.append(all_columns)
+
+        for row_dict in content["data"]:
+            row = [row_dict.get(col, "N/A") for col in all_columns]
+            ws.append(row)
 
     # Remove default sheet if exists
     if "Sheet" in wb.sheetnames:
         wb.remove(wb["Sheet"])
 
-    # Save the workbook
     now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
     wb.save(f"{filename_prefix}_{now_str}.xlsx")
 

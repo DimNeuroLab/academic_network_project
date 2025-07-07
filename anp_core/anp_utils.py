@@ -29,6 +29,9 @@ from matplotlib import pyplot as plt
 import seaborn as sn
 import pandas as pd
 import os
+import ast
+
+from torch_geometric.utils import coalesce
 
 PAPER = 0
 AUTHOR = 1
@@ -39,6 +42,8 @@ WRITES = 1
 ABOUT = 2
 
 MAX_ITERATION = 1
+
+global ROOT, DEVICE, YEAR
 
 
 def expand_1_hop_edge_index(edge_index, node, flow):
@@ -423,6 +428,21 @@ def create_infosphere_top_papers_per_topic_edge_index(data, topics_per_author, p
     edge_index = torch.tensor([src, dst], dtype=torch.long)
     return edge_index
 
+def get_author_paper_edge_by_papers(data, papers):
+    """
+    Get edges connecting authors and papers for a given list of papers.
+    """
+    edge_index = data['author', 'writes', 'paper'].edge_index
+    # Create a mask selecting edges where the paper is in the top papers list
+    if edge_index.device != papers.device:
+        edge_index = edge_index.to(papers.device)
+    mask = torch.isin(edge_index[1], papers)
+
+    # Filter the edge_index based on the mask
+    filtered_edge_index = edge_index[:, mask]
+    return filtered_edge_index
+
+
 
 def drop_edges(edge_index, drop_percentage, seed=42):
     random.seed(seed)
@@ -523,3 +543,83 @@ def generate_graph(path, training_loss_list, validation_loss_list, training_accu
 
     with open(f'{path}{os.path.basename(sys.argv[0][:-3])}_log.json', 'w', encoding='utf-8') as f:
         json.dump(value_log, f, ensure_ascii=False, indent=4)
+
+
+def anp_add_infosphere(infosphere_type, infosphere_parameters, data, drop_percentage):
+    """
+    Add infosphere data to the graph based on the specified type and parameters.
+    Args:
+    - infosphere_type (int): Type of infosphere data to add.
+    - infosphere_parameters (str): Parameters for the infosphere data.
+    - data (Data): The input data.
+    - drop_percentage (float): Percentage of edges to drop.
+    Returns:
+    - None: The function modifies the data in place.
+    """
+    # Add infosphere data if requested
+    if infosphere_type != 0:
+        if infosphere_type == 1:
+            fold = [0, 1, 2, 3, 4]
+            fold_string = '_'.join(map(str, fold))
+            name_infosphere = f"{infosphere_parameters}_infosphere_{fold_string}_{YEAR}_noisy.pt"
+
+            # Load infosphere
+            if os.path.exists(f"{ROOT}/computed_infosphere/{YEAR}/{name_infosphere}"):
+                infosphere_edges = torch.load(f"{ROOT}/computed_infosphere/{YEAR}/{name_infosphere}", map_location=DEVICE)
+                
+                # Drop edges for each type of relationship
+                cites_edges = drop_edges(infosphere_edges[CITES], drop_percentage)
+                writes_edges = drop_edges(infosphere_edges[WRITES], drop_percentage)
+                about_edges = drop_edges(infosphere_edges[ABOUT], drop_percentage)
+        
+                data['paper', 'infosphere_cites', 'paper'].edge_index = coalesce(cites_edges)
+                data['paper', 'infosphere_cites', 'paper'].edge_label = None
+                data['author', 'infosphere_writes', 'paper'].edge_index = coalesce(writes_edges)
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
+                data['paper', 'infosphere_about', 'topic'].edge_index = coalesce(about_edges)
+                data['paper', 'infosphere_about', 'topic'].edge_label = None
+            else:
+                raise Exception(f"{name_infosphere} not found!")
+            
+        elif infosphere_type == 2:
+            infosphere_edge = create_infosphere_top_papers_edge_index(data, int(infosphere_parameters), YEAR)
+            data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
+            data['author', 'infosphere', 'paper'].edge_label = None
+
+        elif infosphere_type == 3:
+            infosphere_parameterss = infosphere_parameters.strip()
+            arg_list = ast.literal_eval(infosphere_parameterss)
+            if os.path.exists(f"{ROOT}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt"):
+                print("Infosphere 3 edge found!")
+                data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{ROOT}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt", map_location=DEVICE)
+                data['author', 'infosphere', 'paper'].edge_label = None
+            else:
+                print("Generating infosphere 3 edge...")
+                infosphere_edge = create_infosphere_top_papers_per_topic_edge_index(data, arg_list[0], arg_list[1], YEAR)
+                data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
+                data['author', 'infosphere', 'paper'].edge_label = None
+                torch.save(data['author', 'infosphere', 'paper'].edge_index, f"{ROOT}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt")
+
+        
+            infosphere_edge = create_infosphere_top_papers_per_topic_edge_index(data, arg_list[0], arg_list[1], YEAR)
+            data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
+            data['author', 'infosphere', 'paper'].edge_label = None
+        
+        elif infosphere_type == 4:
+            if os.path.exists(f"{ROOT}/processed/rec_edge_5_NAIS.pt"):
+                print("Rec edge found!")
+                data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{ROOT}/processed/rec_edge_10_NAIS.pt", map_location=DEVICE)
+                data['author', 'infosphere', 'paper'].edge_label = None
+            else:
+                print("Error: Rec edge not found!")
+                exit()
+        
+        elif infosphere_type == 5:
+            if os.path.exists(f"{ROOT}/processed/rec_edge_10_LightGCN.pt"):
+                print("Rec edge found!")
+                data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{ROOT}/processed/rec_edge_10_LightGCN.pt", map_location=DEVICE)
+                data['author', 'infosphere', 'paper'].edge_label = None
+            else:
+                print("Error: Rec edge not found!")
+                exit()
+

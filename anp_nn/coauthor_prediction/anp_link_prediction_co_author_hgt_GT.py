@@ -115,7 +115,7 @@ if infosphere_type != 0:
             exit()
             
 # Try to predict all the future co-author or just the new one (not present in history)
-coauthor_file = f"{ROOT}/processed/gt_edge_index_{GT_infosphere_type}_{GT_infosphere_parameters}_2019_new_2.pt" 
+coauthor_file = f"{ROOT}/processed/gt_edge_index_{GT_infosphere_type}_{GT_infosphere_parameters}_2019_new_3.pt" 
 print("Co-author edge found!")
 data['author', 'co_author', 'author'].edge_index = torch.load(coauthor_file, map_location=DEVICE)
 data['author', 'co_author', 'author'].edge_label = None

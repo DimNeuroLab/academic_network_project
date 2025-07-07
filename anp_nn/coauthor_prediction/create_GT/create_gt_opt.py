@@ -26,6 +26,9 @@ YEAR = 2019
 
 infosphere_type = int(sys.argv[1])
 infosphere_parameters = sys.argv[2]
+only_new = str(sys.argv[3]).lower() == 'true'  # True or False
+sorted_connection = str(sys.argv[4]).lower() == 'true'  # True or False
+embedding_hindsight = str(sys.argv[5]).lower() == 'true'  # True or False
 only_new = False
 
 # Set the random seed for reproducibility
@@ -38,12 +41,13 @@ np.random.seed(seed)
 ROOT = "../anp_data"
 DEVICE = torch.device(f'cuda:1' if torch.cuda.is_available() else 'cpu')
 if not only_new:
-    if infosphere_type == 1:
-        author_embeddings_path = f'../anp_models/anp_embedding_generation_2025_1_5_False_-1_0.0_2025_04_15_18_25_52/author_embeddings.npy'
+    if infosphere_type == 1 or embedding_hindsight:
+        author_embeddings_path = f'../anp_models_ECAI_2025/anp_embedding_generation_2025_1_5_False_-1_0.0_2025_04_15_18_25_52/author_embeddings.npy'
     else:
-        author_embeddings_path = f'../anp_models/anp_embedding_generation_2025_1_5_False_-1_0.0_2025_04_15_18_25_52/author_embeddings_{infosphere_type}_{infosphere_parameters}.npy'
+        author_embeddings_path = f'../anp_models_ECAI_2025/anp_embedding_generation_2025_1_5_False_-1_0.0_2025_04_15_18_25_52/author_embeddings_{infosphere_type}_{infosphere_parameters}.npy'
 else:
-    author_embeddings_path = f'../anp_models/anp_embedding_generation_2025_1_5_True_-1_0.0_2025_04_15_09_01_32/author_embeddings.npy'
+    author_embeddings_path = f'../anp_models_ECAI_2025/anp_embedding_generation_2025_1_5_True_-1_0.0_2025_04_15_09_01_32/author_embeddings.npy'
+
 print(f"Loading author embeddings from {author_embeddings_path}...")
 author_embeddings = np.load(author_embeddings_path)
 author_embeddings_tensor = torch.tensor(author_embeddings, dtype=torch.float32)
@@ -70,9 +74,9 @@ from academic_network_project.anp_core.anp_utils import *
 
 # Path to the pre-trained model
 if only_new:
-    model_path = '../anp_models/anp_embedding_generation_2025_1_5_True_-1_0.0_2025_04_15_09_01_32/model.pt'
+    model_path = '../anp_models_ECAI_2025/anp_embedding_generation_2025_1_5_True_-1_0.0_2025_04_15_09_01_32/model.pt'
 else:
-    model_path = '../anp_models/anp_embedding_generation_2025_1_5_False_-1_0.0_2025_04_15_18_25_52/model.pt'
+    model_path = '../anp_models_ECAI_2025/anp_embedding_generation_2025_1_5_False_-1_0.0_2025_04_15_18_25_52/model.pt'
 
 # Create ANP dataset
 dataset = ANPDataset(root=ROOT)
@@ -215,9 +219,13 @@ for j, author_node in enumerate(filtered_authors):
     # Applica connessioni dove necessario
     connected_nodes = valid_candidates[connections > 0.5]
 
-    # Ordina i coautori in base alla probabilità di connessione
-    sorted_indices = torch.argsort(connections[connections > 0.5], descending=True)
-    connected_nodes = connected_nodes[sorted_indices]
+    if sorted_connection:
+        # Ordina i coautori in base alla probabilità di connessione
+        sorted_indices = torch.argsort(connections[connections > 0.5], descending=True)
+        connected_nodes = connected_nodes[sorted_indices]
+    else:
+        # Mescola i coautori in modo casuale
+        connected_nodes = connected_nodes[torch.randperm(connected_nodes.size(0))]
 
     for coauthor_node in connected_nodes:
         # Aggiorna l'edge index e i gradi correnti
@@ -236,9 +244,16 @@ for j, author_node in enumerate(filtered_authors):
         print(f"Processed {j + 1}/{len(filtered_authors)} authors. Estimated time remaining: {remaining_time / 60:.2f} minutes")
 
 # Salvataggio delle strutture su disco
-path = f'../anp_data/processed/gt_edge_index_{infosphere_type}_{infosphere_parameters}_{YEAR}_new_3.pt'
+string_add = ""
+if embedding_hindsight:
+    string_add = "_embedding_hindsight"
+
+if sorted_connection:
+    string_add += "_sorted"
+
+path = f'../anp_data/processed/NEW_gt_edge_index_{infosphere_type}_{infosphere_parameters}_{YEAR}_{string_add}.pt'
 torch.save(edge_index, path)
-path = f'../anp_data/processed/gt_probability_dict_{infosphere_type}_{infosphere_parameters}_{YEAR}_new_3.pt'
+path = f'../anp_data/processed/NEW_gt_probability_dict_{infosphere_type}_{infosphere_parameters}_{YEAR}_{string_add}.pt'
 torch.save(probability_dict, path)
 
 
