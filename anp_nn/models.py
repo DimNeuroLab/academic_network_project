@@ -1,9 +1,11 @@
+import torch
 from torch.nn import Linear, Dropout, BatchNorm1d
 from torch_geometric.nn import HGTConv, Linear
+import torch.nn.functional as F
 
 
 class GNNEncoder(torch.nn.Module):
-    def __init__(self, hidden_channels, out_channels, num_heads, num_layers, metadata):
+    def __init__(self, hidden_channels, out_channels, num_heads, num_layers, metadata, data):
         super().__init__()
         self.lin_dict = torch.nn.ModuleDict({
             node_type: Linear(-1, hidden_channels)
@@ -41,9 +43,9 @@ class EdgeDecoder(torch.nn.Module):
         return z.view(-1)
 
 class Model(torch.nn.Module):
-    def __init__(self, hidden_channels):
+    def __init__(self, hidden_channels, data):
         super().__init__()
-        self.encoder = GNNEncoder(hidden_channels, hidden_channels, 1, 2, data.metadata())
+        self.encoder = GNNEncoder(hidden_channels, hidden_channels, 1, 2, data.metadata(), data)
         self.decoder = EdgeDecoder(hidden_channels)
         self.embedding_author = torch.nn.Embedding(data["author"].num_nodes, 32)
         self.embedding_topic = torch.nn.Embedding(data["topic"].num_nodes, 32)
