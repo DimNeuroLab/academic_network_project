@@ -25,14 +25,14 @@ class GNNEncoder(torch.nn.Module):
         for i, conv in enumerate(self.convs):
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {k: self.norms[i](v) for k, v in x_dict.items()}
-            x_dict = {k: F.dropout(v, p=0.3, training=self.training) for k, v in x_dict.items()}
+            x_dict = {k: F.dropout(v, p=0.2, training=self.training) for k, v in x_dict.items()}
         return x_dict
 
 class EdgeDecoder(torch.nn.Module):
     def __init__(self, hidden_channels):
         super().__init__()
         self.lin1 = Linear(2 * hidden_channels, hidden_channels)
-        self.dropout = Dropout(p=0.3)
+        self.dropout = Dropout(p=0.2)
         self.lin2 = Linear(hidden_channels, 1)
 
     def forward(self, z_dict, edge_label_index):

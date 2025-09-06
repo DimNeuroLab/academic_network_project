@@ -32,6 +32,7 @@ import os
 import ast
 
 from torch_geometric.utils import coalesce
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 PAPER = 0
 AUTHOR = 1
@@ -503,7 +504,7 @@ def anp_load(path, device='cpu'):
 
 
 def generate_graph(path, training_loss_list, validation_loss_list, training_accuracy_list, validation_accuracy_list,
-                   confusion_matrix):
+                   confusion_matrix=None, fold=None):
     """
     Generate and save graphs based on training and validation metrics.
 
@@ -521,26 +522,27 @@ def generate_graph(path, training_loss_list, validation_loss_list, training_accu
     plt.plot(training_loss_list, label='train_loss')
     plt.plot(validation_loss_list, label='validation_loss')
     plt.legend()
-    plt.savefig(f'{path}{os.path.basename(sys.argv[0][:-3])}_loss.pdf')
+    plt.savefig(f'{path}{os.path.basename(sys.argv[0][:-3])}_loss_{fold}.pdf')
     plt.close()
 
     plt.plot(training_accuracy_list, label='train_accuracy')
     plt.plot(validation_accuracy_list, label='validation_accuracy')
     plt.legend()
-    plt.savefig(f'{path}{os.path.basename(sys.argv[0][:-3])}_accuracy.pdf')
+    plt.savefig(f'{path}{os.path.basename(sys.argv[0][:-3])}_accuracy_{fold}.pdf')
     plt.close()
 
-    array = [[confusion_matrix['tp'], confusion_matrix['fp']], [confusion_matrix['fn'], confusion_matrix['tn']]]
-    df_cm = pd.DataFrame(array, index=[i for i in ("POSITIVE", "NEGATIVE")], columns=[i for i in ("POSITIVE", "NEGATIVE")])
-    plt.figure(figsize=(10, 7))
-    sn.heatmap(df_cm, annot=True)
-    plt.savefig(f'{path}{os.path.basename(sys.argv[0][:-3])}_CM.pdf')
-    plt.close()
+    if confusion_matrix:
+        array = [[confusion_matrix['tp'], confusion_matrix['fp']], [confusion_matrix['fn'], confusion_matrix['tn']]]
+        df_cm = pd.DataFrame(array, index=[i for i in ("POSITIVE", "NEGATIVE")], columns=[i for i in ("POSITIVE", "NEGATIVE")])
+        plt.figure(figsize=(10, 7))
+        sn.heatmap(df_cm, annot=True)
+        plt.savefig(f'{path}{os.path.basename(sys.argv[0][:-3])}_CM_{fold}.pdf')
+        plt.close()
 
     value_log = {'training_loss_list': training_loss_list, 'validation_loss_list': validation_loss_list,
         'training_accuracy_list': training_accuracy_list, 'validation_accuracy_list': validation_accuracy_list}
 
-    with open(f'{path}{os.path.basename(sys.argv[0][:-3])}_log.json', 'w', encoding='utf-8') as f:
+    with open(f'{path}{os.path.basename(sys.argv[0][:-3])}_log_{fold}.json', 'w') as f:
         json.dump(value_log, f, ensure_ascii=False, indent=4)
 
 
@@ -622,3 +624,11 @@ def anp_add_infosphere(data, infosphere_type, infosphere_parameters, drop_percen
                 print("Error: Rec edge not found!")
                 exit()
 
+
+def compute_metrics(labels, preds, threshold=0.5):
+    preds_bin = (preds >= threshold).int()
+    labels = labels.int()
+    precision = precision_score(labels, preds_bin, zero_division=0)
+    recall = recall_score(labels, preds_bin, zero_division=0)
+    f1 = f1_score(labels, preds_bin, zero_division=0)
+    return precision, recall, f1

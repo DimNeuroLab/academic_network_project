@@ -9,7 +9,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
-from torch.optim.lr_scheduler import OneCycleLR
 from torch_geometric.loader import LinkNeighborLoader
 from tqdm import tqdm
 
@@ -52,7 +51,7 @@ if sorted_flag:
 
 # Setup path and save config
 current_date = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-PATH = f"../anp_models/{os.path.basename(sys.argv[0][:-3])}_{infosphere_type}_{infosphere_parameters}_{only_new}_{edge_number}_{drop_percentage}_{current_date}{suffix}/"
+PATH = f"../anp_models/{suffix}_{GT_infosphere_type}_{GT_infosphere_parameters}_{infosphere_type}_{infosphere_parameters}_{current_date}/"
 os.makedirs(PATH)
 with open(PATH + 'info.json', 'w') as json_file:
     json.dump({'lr': learning_rate, 'infosphere_type': infosphere_type, 'infosphere_parameters': infosphere_parameters,
@@ -87,6 +86,7 @@ for fold in range(5):
     # Filter data
     train_folds = [f for f in range(5) if f != fold]
     val_folds = [fold]
+    print("Training on folds:", train_folds, "Validation on fold:", val_folds)
     sub_graph_train = anp_utils.anp_simple_filter_data(data, root=ROOT, folds=train_folds, max_year=YEAR)
     sub_graph_val = anp_utils.anp_simple_filter_data(data, root=ROOT, folds=val_folds, max_year=YEAR)
 
@@ -120,8 +120,14 @@ for fold in range(5):
 
     model = models.Model(hidden_channels=32, data=data_copy).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    lr_scheduler = OneCycleLR(optimizer, max_lr=learning_rate, steps_per_epoch=len(train_loader), epochs=100,
-                              pct_start=0.1, anneal_strategy='cos')
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 
+        mode='min', 
+        factor=0.5, 
+        patience=3, 
+        min_lr=1e-6
+    )
+
 
     def train():
         model.train()
@@ -142,7 +148,6 @@ for fold in range(5):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
             optimizer.step()
-            lr_scheduler.step()
 
             total_loss += float(loss) * pred.numel()
             total_examples += pred.numel()
@@ -184,46 +189,152 @@ for fold in range(5):
         return total_correct / total_examples, total_loss / total_examples, all_preds, all_labels
 
     best_val_loss = np.inf
-    patience = 5
+    patience = 3
     counter = 0
-    for epoch in range(1, 101):
+    training_loss_list = []
+    validation_loss_list = []
+    training_accuracy_list = []
+    validation_accuracy_list = []
+    confusion_matrix = np.zeros((2, 2), dtype=int)
+    for epoch in range(1, 51):
         train_acc, train_loss, train_preds, train_labels = train()
         val_acc, val_loss, val_preds, val_labels = test(val_loader, fold)
+        lr_scheduler.step(val_loss)
 
+        training_loss_list.append(train_loss)
+        validation_loss_list.append(val_loss)
+        training_accuracy_list.append(train_acc)
+        validation_accuracy_list.append(val_acc)
+
+        # Calcola metriche extra
+        train_precision, train_recall, train_f1 = anp_utils.compute_metrics(train_labels, train_preds)
+        val_precision, val_recall, val_f1 = anp_utils.compute_metrics(val_labels, val_preds)
+
+        print(f'Epoch {epoch:03d}, Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, '
+              f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, '
+              f'Train Precision: {train_precision:.4f}, Train Recall: {train_recall:.4f}, Train F1: {train_f1:.4f}, '
+              f'Val Precision: {val_precision:.4f}, Val Recall: {val_recall:.4f}, Val F1: {val_f1:.4f}')
         if val_loss < best_val_loss:
+            print("New best model found!")
             best_val_loss = val_loss
+            best_value = {
+                'val_loss': val_loss,
+                'val_acc': val_acc,
+                'train_loss': train_loss,
+                'train_acc': train_acc,
+                'val_precision': val_precision,
+                'val_recall': val_recall,
+                'val_f1': val_f1,
+                'train_precision': train_precision,
+                'train_recall': train_recall,
+                'train_f1': train_f1
+            }
+
+            # Save labels and predictions
+            labels_path = os.path.join(PATH, f"labels_and_predictions_fold_{fold}.pt")
+            torch.save({
+                'train_labels': train_labels,
+                'train_preds': train_preds,
+                'val_labels': val_labels,
+                'val_preds': val_preds
+            }, labels_path)
             counter = 0
         else:
             counter += 1
 
-        if counter >= patience and epoch >= 25:
+        if counter >= patience and epoch >= 4:
             break
-
-    # Save labels and predictions
-    labels_path = os.path.join(PATH, f"labels_and_predictions_fold_{fold}.pt")
-    torch.save({
-        'train_labels': train_labels,
-        'train_preds': train_preds,
-        'val_labels': val_labels,
-        'val_preds': val_preds
-    }, labels_path)
-
-    results.append({'fold': fold, 'val_loss': val_loss, 'val_acc': val_acc, 'train_loss': train_loss, 'train_acc': train_acc, 'epoch': epoch})
+    
+    anp_utils.generate_graph(PATH, training_loss_list, validation_loss_list, training_accuracy_list, validation_accuracy_list, None, fold=fold)
+    results.append({
+        'fold': fold,
+        'last_val_loss': val_loss,
+        'last_val_acc': val_acc,
+        'last_train_loss': train_loss,
+        'last_train_acc': train_acc,
+        'last_val_precision': val_precision,
+        'last_val_recall': val_recall,
+        'last_val_f1': val_f1,
+        'last_train_precision': train_precision,
+        'last_train_recall': train_recall,
+        'last_train_f1': train_f1,
+        'epoch': epoch,
+        'best_val_loss': best_value['val_loss'],
+        'best_val_acc': best_value['val_acc'],
+        'best_val_precision': best_value['val_precision'],
+        'best_val_recall': best_value['val_recall'],
+        'best_val_f1': best_value['val_f1'],
+        'best_train_loss': best_value['train_loss'],
+        'best_train_acc': best_value['train_acc'],
+        'best_train_precision': best_value['train_precision'],
+        'best_train_recall': best_value['train_recall'],
+        'best_train_f1': best_value['train_f1']
+    })
 
 # Write results to CSV
 csv_path = os.path.join(PATH, "crossval_results.csv")
 with open(csv_path, 'w', newline='') as csvfile:
-    fieldnames = ['fold', 'val_loss', 'val_acc', 'train_loss', 'train_acc', 'epoch']
+    fieldnames = [
+        'fold',
+        'last_val_loss', 'last_val_acc',
+        'last_val_precision', 'last_val_recall', 'last_val_f1',
+        'last_train_loss', 'last_train_acc',
+        'last_train_precision', 'last_train_recall', 'last_train_f1',
+        'epoch',
+        'best_val_loss', 'best_val_acc',
+        'best_val_precision', 'best_val_recall', 'best_val_f1',
+        'best_train_loss', 'best_train_acc',
+        'best_train_precision', 'best_train_recall', 'best_train_f1'
+    ]
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     for row in results:
         writer.writerow(row)
     # Add average row
-    avg_loss = sum(r['val_loss'] for r in results) / len(results)
-    avg_acc = sum(r['val_acc'] for r in results) / len(results)
-    avg_train_loss = sum(r['train_loss'] for r in results) / len(results)
-    avg_train_acc = sum(r['train_acc'] for r in results) / len(results)
+    avg_loss = sum(r['last_val_loss'] for r in results) / len(results)
+    avg_acc = sum(r['last_val_acc'] for r in results) / len(results)
+    avg_train_loss = sum(r['last_train_loss'] for r in results) / len(results)
+    avg_train_acc = sum(r['last_train_acc'] for r in results) / len(results)
+    avg_precision = sum(r['last_val_precision'] for r in results) / len(results)
+    avg_recall = sum(r['last_val_recall'] for r in results) / len(results)
+    avg_f1 = sum(r['last_val_f1'] for r in results) / len(results)
+    avg_train_precision = sum(r['last_train_precision'] for r in results) / len(results)
+    avg_train_recall = sum(r['last_train_recall'] for r in results) / len(results)
+    avg_train_f1 = sum(r['last_train_f1'] for r in results) / len(results)
     avg_epoch = sum(r['epoch'] for r in results) / len(results)
-    writer.writerow({'fold': 'avg', 'val_loss': avg_loss, 'val_acc': avg_acc, 'train_loss': avg_train_loss, 'train_acc': avg_train_acc, 'epoch': avg_epoch})
+    avg_best_val_loss = sum(r['best_val_loss'] for r in results) / len(results)
+    avg_best_val_acc = sum(r['best_val_acc'] for r in results) / len(results)
+    avg_best_train_loss = sum(r['best_train_loss'] for r in results) / len(results)
+    avg_best_train_acc = sum(r['best_train_acc'] for r in results) / len(results)
+    avg_best_val_precision = sum(r['best_val_precision'] for r in results) / len(results)
+    avg_best_val_recall = sum(r['best_val_recall'] for r in results) / len(results)
+    avg_best_val_f1 = sum(r['best_val_f1'] for r in results) / len(results)
+    avg_best_train_precision = sum(r['best_train_precision'] for r in results) / len(results)
+    avg_best_train_recall = sum(r['best_train_recall'] for r in results) / len(results)
+    avg_best_train_f1 = sum(r['best_train_f1'] for r in results) / len(results)
 
+    writer.writerow({
+        'fold': 'average',
+        'last_val_loss': avg_loss,
+        'last_val_acc': avg_acc,
+        'last_val_precision': avg_precision,
+        'last_val_recall': avg_recall,
+        'last_val_f1': avg_f1,
+        'last_train_loss': avg_train_loss,
+        'last_train_acc': avg_train_acc,
+        'last_train_precision': avg_train_precision,
+        'last_train_recall': avg_train_recall,
+        'last_train_f1': avg_train_f1,
+        'epoch': avg_epoch,
+        'best_val_loss': avg_best_val_loss,
+        'best_val_acc': avg_best_val_acc,
+        'best_val_precision': avg_best_val_precision,
+        'best_val_recall': avg_best_val_recall,
+        'best_val_f1': avg_best_val_f1,
+        'best_train_loss': avg_best_train_loss,
+        'best_train_acc': avg_best_train_acc,
+        'best_train_precision': avg_best_train_precision,
+        'best_train_recall': avg_best_train_recall,
+        'best_train_f1': avg_best_train_f1
+    })
 

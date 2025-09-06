@@ -12,14 +12,13 @@ from torch.optim.lr_scheduler import OneCycleLR
 from torch.nn import Linear, BatchNorm1d, Dropout
 from torch_geometric.loader import LinkNeighborLoader
 from torch_geometric.nn import HGTConv, Linear
-from torch_geometric.utils import coalesce
 from tqdm import tqdm
 
 # Constants
 BATCH_SIZE = 4096
 YEAR = 2019
 ROOT = "../anp_data"
-DEVICE = torch.device(f'cuda:{sys.argv[7]}' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device(f'cuda:0' if torch.cuda.is_available() else 'cpu')
 from academic_network_project.anp_core.anp_dataset import ANPDataset
 from academic_network_project.anp_core.anp_utils import *
 
@@ -44,54 +43,9 @@ with open(PATH + 'info.json', 'w') as json_file:
 dataset = ANPDataset(root=ROOT)
 data = dataset[0]
 
-# Add infosphere data if requested
-if infosphere_type != 0:
-    if infosphere_type == 1:
-        fold = [0, 1, 2, 3, 4]
-        fold_string = '_'.join(map(str, fold))
-        name_infosphere = f"{infosphere_parameters}_infosphere_{fold_string}_{YEAR}_noisy.pt"
-
-        # Load infosphere
-        if os.path.exists(f"{ROOT}/computed_infosphere/{YEAR}/{name_infosphere}"):
-            infosphere_edges = torch.load(f"{ROOT}/computed_infosphere/{YEAR}/{name_infosphere}", map_location=DEVICE)
-            
-             # Drop edges for each type of relationship
-            cites_edges = drop_edges(infosphere_edges[CITES], drop_percentage)
-            writes_edges = drop_edges(infosphere_edges[WRITES], drop_percentage)
-            about_edges = drop_edges(infosphere_edges[ABOUT], drop_percentage)
-    
-            data['paper', 'infosphere_cites', 'paper'].edge_index = coalesce(cites_edges)
-            data['paper', 'infosphere_cites', 'paper'].edge_label = None
-            data['author', 'infosphere_writes', 'paper'].edge_index = coalesce(writes_edges)
-            data['author', 'infosphere_writes', 'paper'].edge_label = None
-            data['paper', 'infosphere_about', 'topic'].edge_index = coalesce(about_edges)
-            data['paper', 'infosphere_about', 'topic'].edge_label = None
-        else:
-            raise Exception(f"{name_infosphere} not found!")
-        
-    elif infosphere_type == 2:
-        infosphere_edge = create_infosphere_top_papers_edge_index(data, int(infosphere_parameters), YEAR)
-        data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
-        data['author', 'infosphere', 'paper'].edge_label = None
-
-    elif infosphere_type == 3:
-        infosphere_parameterss = infosphere_parameters.strip()
-        arg_list = ast.literal_eval(infosphere_parameterss)
-        if os.path.exists(f"{ROOT}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt"):
-            print("Infosphere 3 edge found!")
-            data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{ROOT}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt", map_location=DEVICE)
-            data['author', 'infosphere', 'paper'].edge_label = None
-        else:
-            print("Generating infosphere 3 edge...")
-            infosphere_edge = create_infosphere_top_papers_per_topic_edge_index(data, arg_list[0], arg_list[1], YEAR)
-            data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
-            data['author', 'infosphere', 'paper'].edge_label = None
-            torch.save(data['author', 'infosphere', 'paper'].edge_index, f"{ROOT}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt")
-
-       
-        infosphere_edge = create_infosphere_top_papers_per_topic_edge_index(data, arg_list[0], arg_list[1], YEAR)
-        data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
-        data['author', 'infosphere', 'paper'].edge_label = None
+# Add infosphere
+anp_add_infosphere(data=data, infosphere_type=infosphere_type, infosphere_parameters=infosphere_parameters, drop_percentage=drop_percentage,
+                             root=ROOT, device=DEVICE, year=YEAR)
 
 # Try to predict all the future co-author or just the new one (not present in history)
 coauthor_function = get_difference_author_edge_year if only_new else get_author_edge_year
@@ -200,7 +154,7 @@ class EdgeDecoder(torch.nn.Module):
     def __init__(self, hidden_channels):
         super().__init__()
         self.lin1 = Linear(2 * hidden_channels, hidden_channels)
-        self.dropout = Dropout(p=0.3)
+        self.dropout = Dropout(p=0.1)
         self.lin2 = Linear(hidden_channels, 1)
 
     def forward(self, z_dict, edge_label_index):
@@ -223,8 +177,15 @@ class Model(torch.nn.Module):
         return self.decoder(z_dict, edge_label_index)
 
 model = Model(hidden_channels=32).to(DEVICE)
+
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-lr_scheduler = OneCycleLR(optimizer, max_lr=learning_rate, steps_per_epoch=len(train_loader), epochs=100, pct_start=0.1, anneal_strategy='cos')
+lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 
+        mode='min', 
+        factor=0.5, 
+        patience=3, 
+        min_lr=1e-6
+    )
 
 def train():
     model.train()
@@ -243,9 +204,8 @@ def train():
         target = edge_label
         loss = F.binary_cross_entropy_with_logits(pred, target)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+        #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
         optimizer.step()
-        lr_scheduler.step()
 
         total_loss += float(loss) * pred.numel()
         total_examples += pred.numel()
@@ -306,6 +266,7 @@ for epoch in range(1, 101):
     train_acc, train_loss = train()
     confusion_matrix = {'tp': 0, 'fp': 0, 'fn': 0, 'tn': 0}
     val_acc, val_loss = test(val_loader)
+    lr_scheduler.step(val_loss)
 
     if val_loss < best_val_loss:
         best_val_loss = val_loss
@@ -327,7 +288,10 @@ for epoch in range(1, 101):
 
 generate_graph(PATH, training_loss_list, validation_loss_list, training_accuracy_list, validation_accuracy_list, confusion_matrix)
 
-anp_save(model, PATH, epoch, train_loss, val_loss, val_acc)
+
+# dopo il loop di training
+best_model = torch.load(os.path.join(PATH, "model.pt"))
+
 
 # Save author embeddings
 author_embeddings = {}
