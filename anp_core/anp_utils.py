@@ -462,6 +462,24 @@ def drop_edges(edge_index, drop_percentage, seed=42):
     return edge_index
 
 
+def sample_edges(edge_index, sample_percentage, seed=42):
+    random.seed(seed)
+    num_edges = edge_index.size(1)
+    num_edges_to_sample = int(num_edges * sample_percentage)
+    
+    # Randomly select indices of the edges to sample
+    indices_to_sample = random.sample(range(num_edges), num_edges_to_sample)
+    
+    # Create a mask for the edges to sample
+    mask = torch.zeros(num_edges, dtype=torch.bool)
+    mask[indices_to_sample] = True
+    
+    # Filter the edges to sample
+    edge_index = edge_index[:, mask]
+    
+    return edge_index
+
+
 def anp_save(model, path, epoch, loss, loss_val, accuracy):
     """
   Save the model and associated information.
@@ -600,14 +618,9 @@ def anp_add_infosphere(data, infosphere_type, infosphere_parameters, drop_percen
                 data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
                 data['author', 'infosphere', 'paper'].edge_label = None
                 torch.save(data['author', 'infosphere', 'paper'].edge_index, f"{root}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt")
-
-        
-            infosphere_edge = create_infosphere_top_papers_per_topic_edge_index(data, arg_list[0], arg_list[1], year)
-            data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
-            data['author', 'infosphere', 'paper'].edge_label = None
         
         elif infosphere_type == 4:
-            if os.path.exists(f"{root}/processed/rec_edge_5_NAIS.pt"):
+            if os.path.exists(f"{root}/processed/rec_edge_10_NAIS.pt"):
                 print("Rec edge found!")
                 data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{root}/processed/rec_edge_10_NAIS.pt", map_location=device)
                 data['author', 'infosphere', 'paper'].edge_label = None
@@ -625,6 +638,122 @@ def anp_add_infosphere(data, infosphere_type, infosphere_parameters, drop_percen
                 exit()
 
 
+def anp_add_infosphere_mix(data, infosphere_type, infosphere_parameters, infosphere_type_2, infosphere_parameters_2, mix_ratio, drop_percentage, root, device, year):
+    """
+    Add infosphere data to the graph based on the specified type and parameters.
+    Concatenates new edges to existing edges if present, then coalesces.
+    """
+    def concat_and_coalesce(existing_edges, new_edges):
+        # Ensure both are on same device
+        new_edges = new_edges.to(device)
+
+        if existing_edges is not None and existing_edges.numel() > 0:
+            existing_edges = existing_edges.to(device)
+            combined = torch.cat([existing_edges, new_edges], dim=1)
+        else:
+            combined = new_edges
+
+        return coalesce(combined)
+
+    # Add infosphere data if requested
+    for infosphere_type_curr, infosphere_parameters_curr, curr_mix_ratio in [
+        (infosphere_type, infosphere_parameters, mix_ratio),
+        (infosphere_type_2, infosphere_parameters_2, 1 - mix_ratio)
+    ]:
+        if infosphere_type_curr == 0:
+            continue
+
+        if infosphere_type_curr == 1:
+            fold = [0, 1, 2, 3, 4]
+            fold_string = '_'.join(map(str, fold))
+            name_infosphere = f"{infosphere_parameters_curr}_infosphere_{fold_string}_{year}_noisy.pt"
+
+            if os.path.exists(f"{root}/computed_infosphere/{year}/{name_infosphere}"):
+                infosphere_edges = torch.load(f"{root}/computed_infosphere/{year}/{name_infosphere}", map_location=device)
+
+                cites_edges = sample_edges(drop_edges(infosphere_edges[CITES], drop_percentage), curr_mix_ratio)
+                writes_edges = sample_edges(drop_edges(infosphere_edges[WRITES], drop_percentage), curr_mix_ratio)
+                about_edges = sample_edges(drop_edges(infosphere_edges[ABOUT], drop_percentage), curr_mix_ratio)
+
+                data['paper', 'infosphere_cites', 'paper'].edge_index = concat_and_coalesce(
+                    data['paper', 'infosphere_cites', 'paper'].edge_index if 'edge_index' in data['paper', 'infosphere_cites', 'paper'] else None,
+                    cites_edges
+                )
+                data['paper', 'infosphere_cites', 'paper'].edge_label = None
+
+                data['author', 'infosphere_writes', 'paper'].edge_index = concat_and_coalesce(
+                    data['author', 'infosphere_writes', 'paper'].edge_index if 'edge_index' in data['author', 'infosphere_writes', 'paper'] else None,
+                    writes_edges
+                )
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
+
+                data['paper', 'infosphere_about', 'topic'].edge_index = concat_and_coalesce(
+                    data['paper', 'infosphere_about', 'topic'].edge_index if 'edge_index' in data['paper', 'infosphere_about', 'topic'] else None,
+                    about_edges
+                )
+                data['paper', 'infosphere_about', 'topic'].edge_label = None
+            else:
+                raise Exception(f"{name_infosphere} not found!")
+
+        elif infosphere_type_curr == 2:
+            infosphere_edge = sample_edges(
+                create_infosphere_top_papers_edge_index(data, int(infosphere_parameters_curr), year),
+                curr_mix_ratio
+            )
+            data['author', 'infosphere_writes', 'paper'].edge_index = concat_and_coalesce(
+                data['author', 'infosphere_writes', 'paper'].edge_index if 'edge_index' in data['author', 'infosphere_writes', 'paper'] else None,
+                infosphere_edge
+            )
+            data['author', 'infosphere_writes', 'paper'].edge_label = None
+
+        elif infosphere_type_curr == 3:
+            arg_list = ast.literal_eval(infosphere_parameters_curr.strip())
+            path = f"{root}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt"
+
+            if os.path.exists(path):
+                infosphere_edge = torch.load(path, map_location=device)
+                print("Infosphere 3 edge found!")
+            else:
+                print("Generating infosphere 3 edge...")
+                infosphere_edge = create_infosphere_top_papers_per_topic_edge_index(data, arg_list[0], arg_list[1], year)
+                torch.save(infosphere_edge, path)
+
+            infosphere_edge = sample_edges(infosphere_edge, curr_mix_ratio)
+            data['author', 'infosphere_writes', 'paper'].edge_index = concat_and_coalesce(
+                data['author', 'infosphere_writes', 'paper'].edge_index if 'edge_index' in data['author', 'infosphere_writes', 'paper'] else None,
+                infosphere_edge
+            )
+            data['author', 'infosphere_writes', 'paper'].edge_label = None
+
+        elif infosphere_type_curr == 4:
+            path = f"{root}/processed/rec_edge_10_NAIS.pt"
+            if os.path.exists(path):
+                rec_edge = sample_edges(torch.load(path, map_location=device), curr_mix_ratio)
+                data['author', 'infosphere_writes', 'paper'].edge_index = concat_and_coalesce(
+                    data['author', 'infosphere_writes', 'paper'].edge_index if 'edge_index' in data['author', 'infosphere_writes', 'paper'] else None,
+                    rec_edge
+                )
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
+                print("Rec edge found!")
+            else:
+                print("Error: Rec edge not found!")
+                exit()
+
+        elif infosphere_type_curr == 5:
+            path = f"{root}/processed/rec_edge_10_LightGCN.pt"
+            if os.path.exists(path):
+                rec_edge = sample_edges(torch.load(path, map_location=device), curr_mix_ratio)
+                data['author', 'infosphere_writes', 'paper'].edge_index = concat_and_coalesce(
+                    data['author', 'infosphere_writes', 'paper'].edge_index if 'edge_index' in data['author', 'infosphere_writes', 'paper'] else None,
+                    rec_edge
+                )
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
+                print("Rec edge found!")
+            else:
+                print("Error: Rec edge not found!")
+                exit()
+
+
 def compute_metrics(labels, preds, threshold=0.5):
     preds_bin = (preds >= threshold).int()
     labels = labels.int()
@@ -632,3 +761,5 @@ def compute_metrics(labels, preds, threshold=0.5):
     recall = recall_score(labels, preds_bin, zero_division=0)
     f1 = f1_score(labels, preds_bin, zero_division=0)
     return precision, recall, f1
+
+
