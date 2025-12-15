@@ -30,6 +30,8 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 DEVICE = torch.device(f'cuda:{sys.argv[7]}' if torch.cuda.is_available() else 'cpu')
+if torch.cuda.is_available() and 'cuda' in DEVICE.type:
+    torch.cuda.set_device(DEVICE)
 
 from academic_network_project.anp_core.anp_dataset import ANPDataset
 import academic_network_project.anp_core.anp_utils as anp_utils
@@ -89,7 +91,7 @@ dataset = ANPDataset(root=ROOT)
 data = dataset[0]
 
 # Add infosphere
-if infosphere_type is None:
+if infosphere_type_2 is None:
     anp_utils.anp_add_infosphere(data=data, infosphere_type=infosphere_type, infosphere_parameters=infosphere_parameters, drop_percentage=drop_percentage,
                                 root=ROOT, device=DEVICE, year=YEAR)
 else:
