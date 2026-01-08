@@ -133,7 +133,7 @@ sub_graph_train = anp_utils.anp_simple_filter_data(data, root=ROOT, folds=[0, 1,
 transform_train = T.RandomLinkSplit(
     num_val=0,
     num_test=0,
-    neg_sampling_ratio=1.0,
+    neg_sampling_ratio=3.0,
     add_negative_train_samples=True,
     edge_types=('author', 'co_author', 'author')
 )

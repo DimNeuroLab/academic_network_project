@@ -19,9 +19,10 @@ import time
 # Constants
 BATCH_SIZE = 4096
 YEAR = 2019
-TYPE = "10_NAIS"
+TYPE = sys.argv[1]
+CODE = int(sys.argv[2])
 ROOT = "../anp_data"
-DEVICE = torch.device(f'cuda:{int(sys.argv[2])}' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device(f'cuda:{int(sys.argv[3])}' if torch.cuda.is_available() else 'cpu')
 from academic_network_project.anp_core.anp_dataset import ANPDataset
 from academic_network_project.anp_core.anp_utils import *
 
@@ -105,7 +106,7 @@ for k, author in enumerate(range(data["author"].num_nodes)):
     list_co_author_edges.append(filtered_authors_tensor)
 
 # Salva l'insieme finale su disco come 'co_author_top_paper_NUM.json'
-output_path = f"../anp_data/processed/co_author_infosphere/co_author_{TYPE}_{YEAR}.pt"
+output_path = f"../anp_data/processed/co_author_infosphere/co_author_{CODE}_{YEAR}.pt"
 
 # Salva il tensore in un file .pt
 torch.save(list_co_author_edges, output_path)

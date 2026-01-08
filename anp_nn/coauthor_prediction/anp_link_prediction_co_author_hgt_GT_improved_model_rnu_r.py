@@ -67,7 +67,7 @@ anp_utils.anp_add_infosphere(data=data, infosphere_type=infosphere_type, infosph
                              root=ROOT, device=DEVICE, year=YEAR)
 
 # Load ground truth co-authors
-gt_filename = f"{ROOT}/processed/NEW_gt_edge_index_{GT_infosphere_type}_{GT_infosphere_parameters}_{YEAR}_{suffix}.pt"
+gt_filename = f"{ROOT}/processed/rnu_r_gt_edge_index_{GT_infosphere_type}_{GT_infosphere_parameters}_{YEAR}_{suffix}.pt"
 data['author', 'co_author', 'author'].edge_index = torch.load(gt_filename, map_location=DEVICE)
 data['author', 'co_author', 'author'].edge_label = None
 

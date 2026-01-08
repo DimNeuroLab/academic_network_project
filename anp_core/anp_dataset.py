@@ -22,7 +22,7 @@ import torch
 from torch_geometric.data import HeteroData
 from torch_geometric.data import InMemoryDataset
 
-from academic_network_project.anp_core.parse_aminer_dataset import extract_dataset
+from academic_network_project.anp_utils.parse_aminer_dataset import extract_dataset
 
 
 
