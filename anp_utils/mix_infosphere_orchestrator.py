@@ -11,17 +11,17 @@ from multiprocessing import Pool
 TARGET_SCRIPT = "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py"
 
 # Fixed global parameters
-LEARNING_RATE = "0.001"
+LEARNING_RATE = "0.0001"
 ONLY_NEW = "False"
-EDGE_NUMBER = "150"
+EDGE_NUMBER = "30"
 DROP_PERCENTAGE = "0.0"
-CAMPAIGN_NAME = "mix_infosphere_experiments_2"
+CAMPAIGN_NAME = "mix_infosphere_experiments_xmas_2025"
 
 # List of available GPU IDs. 
 # If you want to run multiple processes on the same GPU, repeat the ID.
 # Example for 4 processes on GPU 0: ["0", "0", "0", "0"]
 # Example for 2 processes on GPU 0 and 2 processes on GPU 1: ["0", "0", "1", "1"]
-AVAILABLE_GPUS = ["1", "1"]
+AVAILABLE_GPUS = ["2", "2", "2"]
 
 # Maximum number of concurrent processes (should not exceed len(AVAILABLE_GPUS))
 MAX_CONCURRENT_PROCESSES = len(AVAILABLE_GPUS)
