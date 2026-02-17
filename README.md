@@ -2,7 +2,7 @@
 
 ### ANP Core
 
-The `anp_core` module is the foundation of the ANP system: it manages datasets, builds and extends the academic (hindight) infosphere, and offers a range of utilities for data processing and analysis within the Academic Network Project. Key functions include loading datasets, assembling the infosphere, expanding its scope, and other essential processing tools.
+The `anp_core` module is the foundation of the ANP system: it manages datasets, builds and extends the academic (hindsight) infosphere, and offers a range of utilities for data processing and analysis within the Academic Network Project. Key functions include loading datasets, assembling the infosphere, expanding its scope, and other essential processing tools.
 
 A standard execution flow is:
 
