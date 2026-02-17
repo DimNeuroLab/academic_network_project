@@ -1,19 +1,41 @@
-# Academic Network Project
-(TODO)
-## ANP Core
-`anp_core` serves as the backbone for handling dataset management, constructing and expanding the academic infosphere, and providing essential utilities for the Academic Network Project (ANP). It encapsulates functionalities for dataset loading, infosphere assembly, expansion, and various data processing tasks crucial for ANP analysis and exploration.
+## Academic Network Project
+
+### ANP Core
+
+The `anp_core` module is the foundation of the ANP system: it manages datasets, builds and extends the academic (hindight) infosphere, and offers a range of utilities for data processing and analysis within the Academic Network Project. Key functions include loading datasets, assembling the infosphere, expanding its scope, and other essential processing tools.
+
+A standard execution flow is:
+
+1. Import the AMiner dataset into PyG and parse its contents.
+2. Use `anp_infosphere_creation` to construct the infosphere, with options to split the work into multiple parts for parallel processing.
+3. For each part, call `anp_infosphere_expansion_caller` to run the `anp_expansion` routines.
+4. Combine all expanded segments by running `anp_infosphere_builder`.
+
+---
+
+### ANP NN
+
+The `anp_nn` package contains Graph Neural Network models designed for prediction within the ANP framework. It currently includes:
+
+* **Co-Author Prediction**: A model based on Heterogeneous Graph Transformers (HGT) to predict future collaborative links among researchers.
+
+* **Synthetic Ground-Truth Generation**: Creates simulated interaction datasets using predefined recommender strategies. It:
+
+  1. Trains a Recommender-Neutral User (RNU) model on historical network data.
+  2. Simulates various recommendation approaches (e.g., no infosphere, hindsight infosphere, top-paper, top-paper × topic, LightGCN).
+  3. Generates labeled interaction pairs according to each approach’s logic.
+
+This addition allows for controlled benchmarking of models and recommender detection methods against known synthetic ground-truths.
+
+For the experiments in the paper, a learning rate of 0.00001 and 50 sampled edges for minibatch creation were used as hyperparameters. The other hyperparameters remain fixed and can be found in the code.
 
 
-The idea is to use it in the following order:
-- Parsing the Aminer dataset (imported into PYG).
-- Generating the infosphere through `anp_infosphere_creation` (enabling parallel generation by dividing the infosphere into parts and utilizing multiple processes).
-- Expansion of each part through `anp_infosphere_expansion_caller` (calling `anp_expansion`).
-- Merging the parts via `anp_infosphere_builder`.
+#### Experimental Procedure
 
-(it will need to be revised to have a single entry point; for now, it's a collection of scripts to be called separately.)
+To run the experiments, after parsing the dataset and generating the *hindsight infosphere*, follow the steps below.
 
-## ANP NN
-`anp_nn` contains models for predictive tasks using Graph Neural Networks (GNNs). Currently, it focuses on co-author prediction and a preliminary aspect of next-topic prediction within the Academic Network Project (ANP). These models leverage graph-based learning to forecast collaboration patterns among authors and anticipate future research topics within the academic sphere.
+1. Train the RNU using the script `anp_link_prediction_co_author_hgt.py` and generate the corresponding weights.
+2. Create a Ground Truth (GT) for each available infosphere by running `create_GT/create_gt_opt.py`.
+3. Run the experiments for each generated GT and each infosphere using the script `anp_link_prediction_co_author_hgt_GT.py`, applying the parameters specified here and in the paper.
 
-
-## [Seedgraph backup](https://drive.google.com/drive/folders/1Zn4QicKTylX0TPE6R8eUp7N-BlkKhMsh?usp=drive_link)
+---
