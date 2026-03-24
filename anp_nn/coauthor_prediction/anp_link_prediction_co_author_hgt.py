@@ -180,8 +180,8 @@ del data['author', 'co_author', 'author']
 
 # Initialize model, optimizer, and embeddings
 model = models_2025.Model(hidden_channels=32, data=data_copy).to(DEVICE)
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-3)
-lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-6)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
 
 def label_smoothed_bce(pred, target, smoothing=0.1):
     target = target * (1 - smoothing) + 0.5 * smoothing
@@ -281,7 +281,7 @@ def test(loader):
 
 # Main Training Loop
 best_val_loss = np.inf
-patience = 3
+patience = 10
 counter = 0
 training_loss_list = []
 validation_loss_list = []

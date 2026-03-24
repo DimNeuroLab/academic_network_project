@@ -8,15 +8,13 @@ from multiprocessing import Pool
 # --- EXPERIMENT CONFIGURATION ---
 
 TARGET_SCRIPT = "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py"
-TARGET_SCRIPT_2 = "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py"
 
 # Fixed global parameters
 LEARNING_RATE = "0.0001"
 ONLY_NEW = "False"
 EDGE_NUMBER = "30"
 DROP_PERCENTAGE = "0.0"
-CAMPAIGN_NAME = "single_infosphere_experiments_6"
-CAMPAIGN_NAME_2 = "single_infosphere_experiments_6_3.0"
+CAMPAIGN_NAME = "single_infosphere_experiments_7"
 
 AVAILABLE_GPUS = ["2", "2", "2"]
 MAX_CONCURRENT_PROCESSES = len(AVAILABLE_GPUS)
@@ -64,7 +62,6 @@ def run_parallel_experiments():
     # Define the sets of experiments to run
     experiment_sets = [
         (TARGET_SCRIPT, CAMPAIGN_NAME),
-        (TARGET_SCRIPT_2, CAMPAIGN_NAME_2)
     ]
 
     # Generate experiments for both script/campaign sets

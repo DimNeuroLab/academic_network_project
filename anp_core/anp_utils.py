@@ -516,9 +516,13 @@ def anp_load(path, device='cpu'):
   - tuple: A tuple containing the loaded model and the epoch.
 
   """
-    with open(path + 'info.json', 'r') as json_file:
+    info_path = os.path.join(path, 'info.json')
+    model_path = os.path.join(path, 'model.pt')
+    
+    with open(info_path, 'r') as json_file:
         data = json.load(json_file)
-    return torch.load(path + 'model.pt', map_location=device), data[-1]["data"]["epoch"]
+    
+    return torch.load(model_path, map_location=device), data['data'][-1]["epoch"]
 
 
 def generate_graph(path, training_loss_list, validation_loss_list, training_accuracy_list, validation_accuracy_list,
@@ -602,28 +606,28 @@ def anp_add_infosphere(data, infosphere_type, infosphere_parameters, drop_percen
             
         elif infosphere_type == 2:
             infosphere_edge = create_infosphere_top_papers_edge_index(data, int(infosphere_parameters), year)
-            data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
-            data['author', 'infosphere', 'paper'].edge_label = None
+            data['author', 'infosphere_writes', 'paper'].edge_index = coalesce(infosphere_edge)
+            data['author', 'infosphere_writes', 'paper'].edge_label = None
 
         elif infosphere_type == 3:
             infosphere_parameterss = infosphere_parameters.strip()
             arg_list = ast.literal_eval(infosphere_parameterss)
             if os.path.exists(f"{root}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt"):
                 print("Infosphere 3 edge found!")
-                data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{root}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt", map_location=device)
-                data['author', 'infosphere', 'paper'].edge_label = None
+                data['author', 'infosphere_writes', 'paper'].edge_index = torch.load(f"{root}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt", map_location=device)
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
             else:
                 print("Generating infosphere 3 edge...")
                 infosphere_edge = create_infosphere_top_papers_per_topic_edge_index(data, arg_list[0], arg_list[1], year)
-                data['author', 'infosphere', 'paper'].edge_index = coalesce(infosphere_edge)
-                data['author', 'infosphere', 'paper'].edge_label = None
-                torch.save(data['author', 'infosphere', 'paper'].edge_index, f"{root}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt")
+                data['author', 'infosphere_writes', 'paper'].edge_index = coalesce(infosphere_edge)
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
+                torch.save(data['author', 'infosphere_writes', 'paper'].edge_index, f"{root}/processed/edge_infosphere_3_{arg_list[0]}_{arg_list[1]}.pt")
         
         elif infosphere_type == 4:
             if os.path.exists(f"{root}/processed/rec_edge_10_NAIS.pt"):
                 print("Rec edge found!")
-                data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{root}/processed/rec_edge_10_NAIS.pt", map_location=device)
-                data['author', 'infosphere', 'paper'].edge_label = None
+                data['author', 'infosphere_writes', 'paper'].edge_index = torch.load(f"{root}/processed/rec_edge_10_NAIS.pt", map_location=device)
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
             else:
                 print("Error: Rec edge not found!")
                 exit()
@@ -631,8 +635,8 @@ def anp_add_infosphere(data, infosphere_type, infosphere_parameters, drop_percen
         elif infosphere_type == 5:
             if os.path.exists(f"{root}/processed/rec_edge_10_LightGCN.pt"):
                 print("Rec edge found!")
-                data['author', 'infosphere', 'paper'].edge_index = torch.load(f"{root}/processed/rec_edge_10_LightGCN.pt", map_location=device)
-                data['author', 'infosphere', 'paper'].edge_label = None
+                data['author', 'infosphere_writes', 'paper'].edge_index = torch.load(f"{root}/processed/rec_edge_10_LightGCN.pt", map_location=device)
+                data['author', 'infosphere_writes', 'paper'].edge_label = None
             else:
                 print("Error: Rec edge not found!")
                 exit()
