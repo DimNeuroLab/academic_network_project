@@ -7,11 +7,12 @@ import numpy as np
 from collections import defaultdict
 
 # --- CONFIGURATION ---
-INPUT_CSV = "gt_pairwise_consistency_combined_4a79cfe0.csv"  # Assicurati che il nome sia corretto
+INPUT_CSV = "2025_d04_30.csv"  # Assicurati che il nome sia corretto
 OUTPUT_DIR = "."  # Current directory
 
 # --- MAPPING INFOSPHERE ---
 INFOSPHERE_MAP = {
+    "0": "None",
     "1": "HIND",
     "2": "TP",
     "3": "TPxT",
@@ -19,10 +20,11 @@ INFOSPHERE_MAP = {
     "5": "LGCN"
 }
 
-INFOSPHERE_ORDER = ["HIND", "TP", "TPxT", "NAIS", "LGCN"]
+INFOSPHERE_ORDER = ["None", "HIND", "TP", "TPxT", "NAIS", "LGCN"]
 
 # Palette colori fissa per consistenza visiva tra tutti i grafici
 PALETTE = {
+    "None": "#cccccc", # Grigio
     "HIND": "#1f77b4", # Blu
     "TP": "#ff7f0e",   # Arancione
     "TPxT": "#2ca02c", # Verde
@@ -124,9 +126,9 @@ def analyze_results():
         heatmap_pivot = heatmap_pivot.reindex(index=sorted_types_1, columns=sorted_types_1)
         
         plt.figure(figsize=(10, 8))
-        sns.heatmap(heatmap_pivot, annot=True, cmap="coolwarm", vmax=1.0, fmt=".3f")
+        sns.heatmap(heatmap_pivot, annot=True, cmap="viridis", vmax=1.0, fmt=".3f")
         plt.title("Chart 1: Compatibility of Pure Infospheres")
-        plt.savefig("1_pure_compatibility.png")
+        plt.savefig(f"{INPUT_CSV.split('.')[0]}_1_pure_compatibility.png")
         plt.close()
 
     # ==========================================
@@ -171,7 +173,7 @@ def analyze_results():
     plt.figure(figsize=(10, 8))
     sns.heatmap(weighted_df, annot=True, cmap="viridis", vmax=1.0, fmt=".3f")
     plt.title("Chart 2: Global Infosphere Compatibility\n(Weighted by Mixing Ratio)")
-    plt.savefig("2_global_weighted_compatibility.png")
+    plt.savefig(f"{INPUT_CSV.split('.')[0]}_2_global_weighted_compatibility.png")
     plt.close()
 
     # ==========================================
@@ -194,7 +196,7 @@ def analyze_results():
     axes[1].set_title("Top 10 LEAST Similar Pairs")
     
     plt.tight_layout()
-    plt.savefig("3_similarity_rankings.png")
+    plt.savefig(f"{INPUT_CSV.split('.')[0]}_3_similarity_rankings.png")
     plt.close()
 
     # ==========================================
@@ -227,7 +229,7 @@ def analyze_results():
     plt.figure(figsize=(10, 8))
     sns.heatmap(isolated_matrix_data, annot=True, cmap="coolwarm", vmax=1.0, fmt=".3f")
     plt.title("Chart 4: Isolated Compatibility\n(Only interactions between row & col types)")
-    plt.savefig("4_isolated_compatibility.png")
+    plt.savefig(f"{INPUT_CSV.split('.')[0]}_4_isolated_compatibility.png")
     plt.close()
 
   # ==========================================
@@ -310,7 +312,7 @@ def analyze_results():
 
         safe_base_name = base.replace('[', '').replace(']', '').replace(',', '_').replace(' ', '')
         plt.tight_layout()
-        plt.savefig(f"5_trajectory_{i+1}_base_{safe_base_name}.png")
+        plt.savefig(f"{INPUT_CSV.split('.')[0]}_5_trajectory_{i+1}_base_{safe_base_name}.png")
         plt.close()
 if __name__ == "__main__":
     analyze_results()

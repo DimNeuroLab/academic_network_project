@@ -21,14 +21,14 @@ import academic_network_project.anp_nn.models_2025 as models_2025
 
 # --- CONFIGURATION ---
 MIX_CAMPAIGN_PATH = "../anp_models_mix_infosphere_experiments_xmas_2025"
-SINGLE_CAMPAIGN_PATH = "../anp_models_single_infosphere_experiments_7" # Nuova path aggiunta
+SINGLE_CAMPAIGN_PATH = "../anp_models_dropout_study_hgt2025_d04_30" # Nuova path aggiunta
 
 ROOT_DATA = "../anp_data"
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 YEAR = 2019
 BATCH_SIZE = 4096 
 SESSION_ID = str(uuid.uuid4())[:8]
-OUTPUT_CSV = f"gt_pairwise_consistency_combined_{SESSION_ID}.csv"
+OUTPUT_CSV = f"gt_pairwise_consistency_combined_{SESSION_ID}_{SINGLE_CAMPAIGN_PATH.split('/')[-1]}.csv"
 SEED = 42
 
 # Ensure reproducibility for the test set generation
@@ -111,7 +111,8 @@ def run_gt_consistency_check():
     )
 
     # 3. Locate Models (Both Mixed and Single)
-    mix_folders = get_model_folders(MIX_CAMPAIGN_PATH)
+    # mix_folders = get_model_folders(MIX_CAMPAIGN_PATH)
+    mix_folders = []
     single_folders = get_model_folders(SINGLE_CAMPAIGN_PATH)
     
     all_gt_folders = mix_folders + single_folders

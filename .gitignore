@@ -179,3 +179,4 @@ anp_nn/need_to_go/*
 anp_nn/coauthor_prediction/RNU_GT_experiments/gt_pairwise_consistency_*
 anp_nn/coauthor_prediction/RNU_GT_experiments/consistency_results_*/*
 anp_nn/coauthor_prediction/RNU_GT_experiments/*.png
+anp_nn/coauthor_prediction/RNU_GT_experiments

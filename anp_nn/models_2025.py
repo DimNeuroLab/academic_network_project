@@ -5,10 +5,10 @@ import torch.nn.functional as F
 
 
 class GNNEncoder(torch.nn.Module):
-    def __init__(self, hidden_channels, out_channels, num_heads, num_layers, metadata, data):
+    def __init__(self, hidden_channels, out_channels, num_heads, num_layers, metadata, data, dropout_p=0.2):
         super().__init__()
-        self.dropout_p = 0.2
-        
+        self.dropout_p = dropout_p
+
         self.lin_dict = torch.nn.ModuleDict({
             node_type: Linear(-1, hidden_channels)
             for node_type in data.node_types
@@ -66,9 +66,9 @@ class EdgeDecoder(torch.nn.Module):
         return (z_src * z_dst).sum(dim=-1)
 
 class Model(torch.nn.Module):
-    def __init__(self, hidden_channels, data):
+    def __init__(self, hidden_channels, data, dropout_p=0.2):
         super().__init__()
-        self.encoder = GNNEncoder(hidden_channels, hidden_channels, 1, 2, data.metadata(), data)
+        self.encoder = GNNEncoder(hidden_channels, hidden_channels, 1, 2, data.metadata(), data, dropout_p)
         self.decoder = EdgeDecoder(hidden_channels)
         self.embedding_author = torch.nn.Embedding(data["author"].num_nodes, 64)
         self.embedding_topic = torch.nn.Embedding(data["topic"].num_nodes, 64)

@@ -46,14 +46,15 @@ only_new = sys.argv[4].lower() == 'true'
 edge_number = int(sys.argv[5])
 drop_percentage = float(sys.argv[6])
 campaign_name = sys.argv[8]
+dropout_p = float(sys.argv[9]) if len(sys.argv) > 9 else 0.2 
 
 experiment_label = f"{campaign_name}_{infosphere_type}_{infosphere_parameters}"
 
 # Optional arguments with default values
-if len(sys.argv) > 11:
-    infosphere_type_2 = int(sys.argv[9])
-    infosphere_parameters_2 = sys.argv[10]
-    infosphere_mix_ratio = float(sys.argv[11])
+if len(sys.argv) > 12:
+    infosphere_type_2 = int(sys.argv[10])
+    infosphere_parameters_2 = sys.argv[11]
+    infosphere_mix_ratio = float(sys.argv[12])
     print(f"Using second infosphere type: {infosphere_type_2} with parameters {infosphere_parameters_2} and mix ratio {infosphere_mix_ratio}")
     experiment_label += f"_{infosphere_type_2}_{infosphere_parameters_2}_{infosphere_mix_ratio}"
 else:
@@ -161,6 +162,9 @@ train_loader = LinkNeighborLoader(
     edge_label=edge_label,
     batch_size=1024,
     shuffle=True,
+    num_workers=4,         
+    prefetch_factor=2,      
+    persistent_workers=True
 )
 
 edge_label_index = val_data['author', 'co_author', 'author'].edge_label_index
@@ -172,6 +176,9 @@ val_loader = LinkNeighborLoader(
     edge_label=edge_label,
     batch_size=1024,
     shuffle=False,
+    num_workers=4,         
+    prefetch_factor=2,      
+    persistent_workers=True
 )
 
 # Delete the co-author edge (data will be used for data.metadata())
@@ -179,7 +186,7 @@ del data['author', 'co_author', 'author']
 
 
 # Initialize model, optimizer, and embeddings
-model = models_2025.Model(hidden_channels=32, data=data_copy).to(DEVICE)
+model = models_2025.Model(hidden_channels=32, data=data_copy, dropout_p=dropout_p).to(DEVICE)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
 
@@ -281,7 +288,7 @@ def test(loader):
 
 # Main Training Loop
 best_val_loss = np.inf
-patience = 10
+patience = 3
 counter = 0
 training_loss_list = []
 validation_loss_list = []

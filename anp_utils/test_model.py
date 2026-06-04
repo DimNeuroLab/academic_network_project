@@ -5,37 +5,107 @@ import time
 from datetime import datetime
 from multiprocessing import Pool
 
-# --- EXPERIMENT CONFIGURATION ---
+os.environ["OMP_NUM_THREADS"] = "4"
+os.environ["MKL_NUM_THREADS"] = "4"
 
-TARGET_SCRIPT = "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py"
-
-# Fixed global parameters
-LEARNING_RATE = "0.0001"
-ONLY_NEW = "False"
-EDGE_NUMBER = "30"
-DROP_PERCENTAGE = "0.0"
-CAMPAIGN_NAME = "single_infosphere_experiments_7"
-
-AVAILABLE_GPUS = ["2", "2", "2"]
+AVAILABLE_GPUS = ["0", "0"]
 MAX_CONCURRENT_PROCESSES = len(AVAILABLE_GPUS)
 
-# Definition of Infospheres (single)
-infospheres = [
+LEARNING_RATE  = "0.0001"
+ONLY_NEW       = "False"
+DROP_PERCENTAGE = "0.0"  
+
+INFOSPHERES = [
+    {"type": 0, "params": 0},
     {"type": 1, "params": 5},
     {"type": 2, "params": 10},
     {"type": 3, "params": "[5,2]"},
     {"type": 4, "params": 0},
-    {"type": 5, "params": 0}
+    {"type": 5, "params": 0},
 ]
+
+CAMPAIGNS = [
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py",
+        "dropout":  0.0,
+        "campaign": "dropout_study_hgt2025_d00_30",
+        "edge_number": 30
+    },
+     {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py",
+        "dropout":  0.0,
+        "campaign": "dropout_study_hgt2025_d00_50",
+        "edge_number": 50
+    },
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py",
+        "dropout":  0.2,
+        "campaign": "dropout_study_hgt2025_d02_30",
+        "edge_number": 30
+    },
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py",
+        "dropout":  0.2,
+        "campaign": "dropout_study_hgt2025_d02_50",
+        "edge_number": 50
+    },
+     {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py",
+        "dropout":  0.4,
+        "campaign": "dropout_study_hgt2025_d04_30",
+        "edge_number": 30
+    },
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt.py",
+        "dropout":  0.4,
+        "campaign": "dropout_study_hgt2025_d04_50",
+        "edge_number": 50
+    },
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt_2026.py",
+        "dropout":  0.0,
+        "campaign": "dropout_study_hgt2026_d00_30",
+        "edge_number": 30
+    },
+     {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt_2026.py",
+        "dropout":  0.0,
+        "campaign": "dropout_study_hgt2026_d00_50",
+        "edge_number": 50
+    },
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt_2026.py",
+        "dropout":  0.2,
+        "campaign": "dropout_study_hgt2026_d02_30",
+        "edge_number": 30
+    },
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt_2026.py",
+        "dropout":  0.2,
+        "campaign": "dropout_study_hgt2026_d02_50",
+        "edge_number": 50
+    },
+     {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt_2026.py",
+        "dropout":  0.4,
+        "campaign": "dropout_study_hgt2026_d04_30",
+        "edge_number": 30
+    },
+    {
+        "script":   "../anp_nn/coauthor_prediction/anp_link_prediction_co_author_hgt_2026.py",
+        "dropout":  0.4,
+        "campaign": "dropout_study_hgt2026_d04_50",
+        "edge_number": 50
+    }
+]
+
 
 def execute_experiment(args):
     cmd, label = args
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # In this configuration, GPU ID is at index 8
     gpu_id = cmd[8]
 
     print(f"[{timestamp}] STARTED: {label} [GPU {gpu_id}]")
-
     try:
         time.sleep(1)
         subprocess.run(
@@ -43,46 +113,56 @@ def execute_experiment(args):
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
         )
         print(f"[{datetime.now().strftime('%H:%M:%S')}] FINISHED: {label} [GPU {gpu_id}]")
         return f"SUCCESS: {label}"
-
     except subprocess.CalledProcessError as e:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR in {label}:\n{e.output}")
         return f"ERROR: {label}"
 
-def run_parallel_experiments():
-    if not os.path.exists(TARGET_SCRIPT):
-        print(f"[ERROR] The file '{TARGET_SCRIPT}' was not found.")
-        return
 
+def run_parallel_experiments():
     commands_list = []
 
-    # Define the sets of experiments to run
-    experiment_sets = [
-        (TARGET_SCRIPT, CAMPAIGN_NAME),
-    ]
+    for camp in CAMPAIGNS:
+        script   = camp["script"]
+        dropout  = camp["dropout"]
+        edge_number = camp["edge_number"]
+        campaign = camp["campaign"]
 
-    # Generate experiments for both script/campaign sets
-    for script, campaign in experiment_sets:
-        for info in infospheres:
+        if not os.path.exists(script):
+            print(f"[WARNING] Script not found, skipping: {script}")
+            continue
+
+        for info in INFOSPHERES:
+            if (info["type"] == 1 or info["type"] == 0) and script.endswith("hgt.py") and dropout == 0.0:
+                print(f"Already processed: {script} with infosphere type {info['type']}")
+                continue
+            if (info["type"] == 1 or info["type"] == 0) and script.endswith("hgt.py") and dropout == 0.2 and edge_number == 30:
+                print(f"Already processed: {script} with infosphere type {info['type']} and dropout {dropout}")
+                continue
             cmd = [
                 sys.executable, script,
-                LEARNING_RATE,                 # argv[1]
-                str(info["type"]),             # argv[2]
-                str(info["params"]),           # argv[3]
-                ONLY_NEW,                      # argv[4]
-                EDGE_NUMBER,                   # argv[5]
-                DROP_PERCENTAGE,               # argv[6]
-                "TBD",                         # argv[7] - Placeholder for GPU
-                campaign                       # argv[8]
+                LEARNING_RATE,          # argv[1]
+                str(info["type"]),      # argv[2]
+                str(info["params"]),    # argv[3]
+                ONLY_NEW,               # argv[4]
+                str(edge_number),       # argv[5]
+                DROP_PERCENTAGE,        # argv[6]
+                "TBD",                  # argv[7] — GPU, assegnato sotto
+                campaign,               # argv[8]
+                str(dropout),           # argv[9] — dropout_p (NUOVO)
             ]
-
-            label = f"Script={os.path.basename(script)} | Infosphere={info['type']} | Campaign={campaign}"
+            label = (
+                f"Model={os.path.basename(script)} | "
+                f"Dropout={dropout} | "
+                f"Infosphere={info['type']} | "
+                f"Campaign={campaign}"
+            )
             commands_list.append((cmd, label))
 
-    # Assign GPUs cyclically across all generated commands
+    # Assegna GPU in modo ciclico
     for i, (cmd, _) in enumerate(commands_list):
         cmd[8] = AVAILABLE_GPUS[i % len(AVAILABLE_GPUS)]
 
@@ -91,12 +171,13 @@ def run_parallel_experiments():
     print(f"Max concurrent processes: {MAX_CONCURRENT_PROCESSES}")
     print("-" * 60)
 
-    # Execute using the multiprocessing pool
     with Pool(processes=MAX_CONCURRENT_PROCESSES) as pool:
-        pool.map(execute_experiment, commands_list)
+        results = pool.map(execute_experiment, commands_list)
 
     print("-" * 60)
-    print("All experiment sets completed.")
+    successes = sum(1 for r in results if r.startswith("SUCCESS"))
+    print(f"Completati: {successes}/{len(results)}")
+
 
 if __name__ == "__main__":
     run_parallel_experiments()
